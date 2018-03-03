@@ -21,9 +21,6 @@ Cnen=[zeros(d1,6) repmat(Sigma3,1,6).*G -repmat(Sigma2,1,6).*G];
 Cnne=[repmat(1-Sigma2-Sigma3,1,6).*G repmat(Sigma1,1,6).*G repmat(Sigma1,1,6).*G];
 c7=Sigma1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%
-C_ineq=[-C1;Cnen;Cnne];
-c_ineq=[zeros(4*d1,1);c7];
-
-%c=[ones(4*d1,1); zeros(3*d1,1)];
+ 
 end
 
