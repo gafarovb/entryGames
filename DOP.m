@@ -1,10 +1,10 @@
-classdef DOP
+classdef DOP<handle
     %DOP Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
         order = 2;
-        coeffVector; %alpha
+        outcome = [1;0];
         x;
         bernFromSP;
         binom;
@@ -12,41 +12,30 @@ classdef DOP
     
     methods
         
-        function obj = DOP(x)
+        function obj = DOP(x,outcome )
             
             % obj.order = order;
+            obj.outcome = outcome;
             obj.bernFromSP = obj.BernsteinFromSP( obj.order);
             obj.binom = obj.nchoosekMat( obj.order);
             
             obj.x = x;
-            nCoeff = (obj.order+1)^2;
-            obj.coeffVector =  0.1* ones(nCoeff,1);
-        end
-        
-        
-        
+          end
         function basPoly = bernstein_i(obj,i,v)
-            
-            n = obj.order;
-            
-            basPoly  =  nchoosek(n,i)  * (v(:,1).^i).*((1-v(:,1)).^(n-i)) ;
-            
+            basPoly  =  nchoosek(obj.order,i)  * (v(:,1).^i).*((1-v(:,1)).^(obj.order-i)) ;
         end
-        
-        function fun = sieve(obj,v)
+        function fun = sieve(obj,coeffVector,v)
             n = obj.order;
             fun = 0;
             lx =1;
             for jx = 0:n
                 for ix = 0:n
-                    fun =   fun  + obj.coeffVector(lx)* obj.bernstein_i(ix,v(:,1)) * obj.bernstein_i(jx,v(:,2));
+                    fun =   fun  + coeffVector(lx)* obj.bernstein_i(ix,v(:,1)) * obj.bernstein_i(jx,v(:,2));
                     lx = lx + 1;
                 end
             end
         end
-        
-        
-        function uniIntegral = uniIntegrals(obj,theta )
+        function [mu,Sigma,xB,delta]= muSigma(obj,theta)
             beta1 = theta(1:2) ;
             delta1 = theta(3) ;
             beta2 = theta(4:5) ;
@@ -55,66 +44,33 @@ classdef DOP
             xB_1 = [1 x(1)]* beta1;
             xB_2 = [1 x(2)]* beta2;
             
-            n = obj.order;
             
-            SPfromI = obj.bernFromSP * obj.SPfromI_ix(obj.binom,delta1,xB_1);
-            SPfromI(:,:,2) = obj.bernFromSP * obj.SPfromI_ix(obj.binom,delta2,xB_2);
-            
-            uniIntegral(:,1) = SPfromI(:,:,1)*(obj.stdIntegral(n, delta1-xB_1) - obj.stdIntegral(n, -xB_1));
-            uniIntegral(:,2) = SPfromI(:,:,2)*(obj.stdIntegral(n, delta1-xB_2) - obj.stdIntegral(n, -xB_2));
-            
+            xB = [xB_1;xB_2];
+            delta = [delta1;delta2];
+            mu = ones(2,1) - xB./delta ;
+            Sigma = [1/delta1^2 0;...
+                0 1/delta2^2];
         end
-          function vecTesnorInt = vecTensorIntegrals(obj,theta )
-              uniIntegr = uniIntegrals(obj,theta );
-              tensorInt = kron(uniIntegr(:,1),uniIntegr(:,2)');
-              
-              n = size(tensorInt,1);
-              vecTesnorInt = reshape(tensorInt, n*n,1);
-              
-          end
-         
-          
-          function answ = evalIntegral(obj,theta)
-              answ = vecTensorIntegrals(obj,theta )'*obj.coeffVector;
-          end
-    end
-    
-  
-    methods (Static)
-        
-        function binom = nchoosekMat(order)
-            
-            binom  = zeros(order+1, order+1);
-            for ix = 0:order
-                for jx = 0:ix
-                    binom(ix+1, jx+1) = nchoosek(ix,jx) ;
-                end
+        function uniIntegral = uniIntegrals(obj,theta )
+            [mu,Sigma,xB,delta] = muSigma(obj,theta);
+            for i = 1:2
+                SPfromI(:,:,i) = obj.bernFromSP * obj.SPfromI_ix(delta(i),xB(i));
+                ulim = (1 - mu(i))/sqrt(Sigma(i,i));
+                llim = ulim - 1 /sqrt(Sigma(i,i));
+                uniIntegral(:,i) = SPfromI(:,:,i)*(obj.stdIntegral(ulim ) - obj.stdIntegral(llim ));
             end
-        end
-        
-        function conversion = BernsteinFromSP(order)
-            
-             
-            ix =  order;
-            conversion = zeros(ix+1, order+1);
-            
-            lineNum = 0;
-            for kx = 0:ix
-                lineNum = lineNum+1;
-                C_i_k = nchoosek(ix,kx);
-                for jx= 0:(ix-kx)
-                    conversion(lineNum , 1 + kx + jx) = C_i_k * ((-1)^jx)*nchoosek(ix-kx,jx);
-                end
-            end
-             
-             
-            
-            
             
         end
-        
-        
-        function  conversion = SPfromI_ix(binom,delta,xB)
+        function vecTesnorInt = vecTensorIntegrals(obj,theta )
+            uniIntegr = uniIntegrals(obj,theta );
+            tensorInt = (uniIntegr(:,1)*uniIntegr(:,2)');
+            
+            n = size(tensorInt,1);
+            vecTesnorInt = reshape(tensorInt, n*n,1);
+            
+        end
+        function  conversion = SPfromI_ix(obj,delta,xB)
+            binom = obj.binom;
             order = size(binom,1)-1;
             xbPowers = (delta-xB).^(0:order);
             
@@ -126,30 +82,110 @@ classdef DOP
             deltaPowers = (delta).^(-(0:order));
             repDelta = repmat(deltaPowers',1,order+1) ;
             conversion = rep.* binom.*repDelta;
-
+            
         end
-        
-        
-        function Integr = stdIntegral(order, x)
+        function answ = evalIntegral(obj,theta,coeffVector)
+            answ = vecTensorIntegrals(obj,theta )'*coeffVector;
+        end
+        function Integr = stdIntegral(obj, x)
+            % this function was unit tested for order up to 4 on 3/20/2018
+            order = obj.order;
             Integr = zeros(order+1,2);
             
             for ix =0:order
                 switch ix
                     case 0
-                        Integr(ix+1,:) = [0 -1];
+                        Integr(ix+1,:) = [0 1];
                     case 1
-                        Integr(ix+1,:) = [-1 0];
+                        Integr(ix+1,:) = [1 0];
                     case 2
-                        Integr(ix+1,:) = [-x 1];
+                        Integr(ix+1,:) = [x 1];
                     otherwise
-                        Integr(ix+1,:) = [(ix-1)*Integr(ix-1,1)- x^(ix-1)   (ix-1)*Integr(ix-1,2)];
+                        Integr(ix+1,:) = [(ix-1)*Integr(ix-1,1)+ x^(ix-1)   (ix-1)*Integr(ix-1,2)];
                 end
             end
-            phi=[normpdf(x) ; normcdf(x) ];
+            phi=[-normpdf(x) ; normcdf(x) ];
             Integr = Integr * phi;
             
             
         end
+        
+        
+        function intAy = integralAy(obj,theta)
+            [mu,Sigma,xB,delta]= muSigma(obj,theta);
+            
+            for i = 1:2
+                ulim = (1 - mu(i))/sqrt(Sigma(i,i));
+                llim = ulim - 1 /sqrt(Sigma(i,i));
+                if obj.outcome(i)
+                        integralOf(i) = (1-normcdf(ulim));
+                else
+                        integralOf(i) = normcdf(llim); 
+                end
+               
+            end
+            intAy = prod(integralOf);
+        end
+        
+        
+        function ll = loglikelihood(obj,gamma)
+            if size(obj,1)>1
+               ll = 0;
+               for ix = 1:size(obj,1)
+                  ll = ll+ loglikelihood(obj(ix),gamma);
+               end
+            else
+            theta = gamma(1:6);
+            hMat  = reshape(gamma(7:end),(obj.order+1)^2,3);
+            
+            switch 10*obj.outcome(1) + obj.outcome(2)
+                case 00
+                    coeffVector = hMat(:,1);
+                case  11
+                    coeffVector = hMat(:,2);
+                case 10
+                    coeffVector = hMat(:,3);
+                case 01
+                    coeffVector = 1- sum( hMat,2);
+            end
+             
+             
+             
+               
+             ll =log (logBarrier( evalIntegral(obj,theta,coeffVector)+integralAy(obj,theta)));
+            end
+        end
+        
+        
+    end
+    methods (Static)
+        
+        
+        function binom = nchoosekMat(order)
+            
+            binom  = zeros(order+1, order+1);
+            for ix = 0:order
+                for jx = 0:ix
+                    binom(ix+1, jx+1) = nchoosek(ix,jx) ;
+                end
+            end
+        end
+        function conversion = BernsteinFromSP(order)
+            
+            
+            ix =  order;
+            conversion = zeros(ix+1, order+1);
+            
+            lineNum = 0;
+            for kx = 0:ix
+                lineNum = lineNum+1;
+                C_i_k = nchoosek(ix,kx);
+                for jx= 0:(ix-kx)
+                    conversion(lineNum , 1 + kx + jx) = C_i_k * ((-1)^jx)*nchoosek(ix-kx,jx);
+                end
+            end
+        end
+        
     end
     
     
