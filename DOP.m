@@ -115,16 +115,24 @@ classdef DOP<handle
             [mu,Sigma,xB,delta]= muSigma(obj,theta);
             
             for i = 1:2
-                ulim = (1 - mu(i))/sqrt(Sigma(i,i));
-                llim = ulim - 1 /sqrt(Sigma(i,i));
-                if obj.outcome(i)
-                        integralOf(i) = (1-normcdf(ulim));
-                else
-                        integralOf(i) = normcdf(llim); 
-                end
-               
+                ulim(i) = (1 - mu(i))/sqrt(Sigma(i,i));
+                llim(i) = ulim(i) - 1 /sqrt(Sigma(i,i));           
             end
-            intAy = prod(integralOf);
+            
+            switch 10*obj.outcome(1) + obj.outcome(2)
+                case 00 
+                    intAy = prod(1-normcdf(ulim));
+                case 11 
+                     intAy = prod(normcdf(llim));
+                case 10
+                     intAy = (1-normcdf(llim(2)))*normcdf(llim(1))  + (1-normcdf(ulim(2)))*(normcdf(ulim(1)) - normcdf(llim(1)) );
+                case 01
+                     intAy =  (1-normcdf(llim(1)))*normcdf(llim(2))  + (1-normcdf(ulim(1)))*(normcdf(ulim(2)) - normcdf(llim(2)) );
+                otherwise
+                         error('Wrong value for the outcome')
+
+            end
+ 
         end
         
         
@@ -150,8 +158,6 @@ classdef DOP<handle
             end
              
              
-             
-               
              ll =log (logBarrier( evalIntegral(obj,theta,coeffVector)+integralAy(obj,theta)));
             end
         end

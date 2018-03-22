@@ -1,7 +1,7 @@
 
-beta1 = [1;2];
+beta1 = [1;1];
 theta(1:2,1) =  beta1 ;
-delta1 = 2;
+delta1 = 1;
 theta(3,1) = delta1 ;
 
 beta2 = [1;1];
@@ -12,7 +12,7 @@ theta(6,1) = delta2 ;
 x = [  1 0 ];
 xB_1 = [1 x(1)]* beta1;
 n = size(x,1);
-sieves = DOP(x);
+sieves = DOP(x,[0; 1]);
 order = sieves.order;
 analyticIntegrals = sieves.uniIntegrals(theta);
 
