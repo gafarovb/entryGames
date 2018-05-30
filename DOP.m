@@ -3,11 +3,11 @@ classdef DOP<handle
     %   Detailed explanation goes here
     
     properties
-        order = 1;
-        outcome = [1;0];
-        x;
-        bernFromSP;
-        binom;
+        order = 1;        % order of h
+        outcome = [1;0];  % outcome
+        x;                % regressor 
+        bernFromSP;        
+        binom;            
     end
     
     methods
@@ -105,9 +105,7 @@ classdef DOP<handle
                 end
             end
             phi=[-normpdf(x) ; normcdf(x) ];
-            Integr = Integr * phi;
-            
-            
+            Integr = Integr * phi; 
         end
         
         
